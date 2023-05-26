@@ -117,6 +117,7 @@ class _OptCodeState extends State<_OptCode> {
       growable: false,
       (index) => FocusNode(),
     ));
+    widget.controllers.last.addListener(_validLastField);
   }
 
   @override
@@ -254,6 +255,16 @@ class _OptCodeState extends State<_OptCode> {
           _hasError = false;
         }),
       );
+    }
+  }
+
+  void _validLastField() {
+    final value = widget.controllers.last.text;
+
+    if (value.length == 1 && AppRegexps.isDigit(value)) {
+      setState(() {
+        _isCompleted = true;
+      });
     }
   }
 
