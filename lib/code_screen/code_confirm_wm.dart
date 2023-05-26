@@ -2,6 +2,7 @@ import 'package:elementary/elementary.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:otp_autofill_example/code_screen/code_confirm_model.dart';
+import 'package:otp_autofill_example/service/otp_service.dart';
 
 import 'code_confirm_screen.dart';
 
@@ -11,7 +12,10 @@ const _otpLength = 6;
 CodeConfirmWm _create(BuildContext context) {
   final model = CodeConfirmModel(TestErrorHandler());
 
-  return CodeConfirmWm(model);
+  return CodeConfirmWm(
+    model,
+    otpService: OtpService(),
+  );
 }
 
 /// Интерфейс Wm экрана подтверждения авторизации.
@@ -37,11 +41,17 @@ class CodeConfirmWm extends WidgetModel<CodeConfirmScreen, ICodeConfirmModel>
     (index) => TextEditingController(text: zeroWidthChar),
   ));
 
+  final IOtpService _otpService;
+
   @override
   int get otpLength => _otpLength;
 
   /// @nodoc
-  CodeConfirmWm(ICodeConfirmModel model) : super(model);
+  CodeConfirmWm(
+    ICodeConfirmModel model, {
+    required IOtpService otpService,
+  })  : _otpService = otpService,
+        super(model);
 
   /// Фабрика.
   factory CodeConfirmWm.create(BuildContext context) => _create(context);
@@ -49,6 +59,7 @@ class CodeConfirmWm extends WidgetModel<CodeConfirmScreen, ICodeConfirmModel>
   @override
   void initWidgetModel() {
     super.initWidgetModel();
+    _otpService.init(onCode: _onOtpCode);
   }
 
   @override
@@ -65,7 +76,9 @@ class CodeConfirmWm extends WidgetModel<CodeConfirmScreen, ICodeConfirmModel>
     debugPrint(code);
   }
 
-  void _autofillCode(String code) {
+  void _onOtpCode(String code) {
+    debugPrint(code);
+
     for (var index = 0; index < otpLength; index++) {
       codeFieldsControllers[index].text = code[index];
     }

@@ -11,7 +11,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Autofill example',
+      title: 'OTP autofill example',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),

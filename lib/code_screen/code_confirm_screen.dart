@@ -20,6 +20,7 @@ class CodeConfirmScreen extends ElementaryWidget<ICodeConfirmWm> {
   @override
   Widget build(ICodeConfirmWm wm) {
     return Scaffold(
+      appBar: AppBar(title: const Text('OTP autofill example')),
       body: Center(
         child: _OptCode(
           controllers: wm.codeFieldsControllers,
@@ -317,8 +318,6 @@ class _OptCodeInputState extends State<_OptCodeInput> {
   Widget build(BuildContext context) {
     final mqData = MediaQuery.of(context);
 
-    // TODO(sukhov): переработать анимацию состояния загрузки
-    // https://github.com/surfstudio/cyberdom-flutter/issues/69
     return widget.isLoading
         ? _CodeInputPlaceholder(
             text: widget.controller.text,
