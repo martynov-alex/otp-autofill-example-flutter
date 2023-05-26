@@ -229,10 +229,9 @@ class _OptCodeState extends State<_OptCode> {
       debugPrint('isCodeEnteredAutomatically - $value');
       widget.onOtpCode(value);
     }
-
     // Теряем фокус и передаем итоговое значение если достигли конца при вводе
     // вручную и все элементы имеют значение
-    if (isCodeEnteredManually) {
+    else if (isCodeEnteredManually) {
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
         _isCompleted = true;
