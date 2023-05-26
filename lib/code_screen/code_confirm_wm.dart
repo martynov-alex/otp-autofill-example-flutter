@@ -28,6 +28,9 @@ abstract class ICodeConfirmWm extends IWidgetModel {
 
   /// Отправка запроса на подтверждение авторизации.
   void submitCode(String code);
+
+  /// Обработка кода, который введен через распознавание SMS.
+  void onOtpCode(String code);
 }
 
 /// Реализация [ICodeConfirmWm].
@@ -38,7 +41,11 @@ class CodeConfirmWm extends WidgetModel<CodeConfirmScreen, ICodeConfirmModel>
       List.unmodifiable(List<TextEditingController>.generate(
     _otpLength,
     growable: false,
-    (index) => TextEditingController(text: zeroWidthChar),
+    // Чтоб появилось предложение вставить код на iOS, когда мы стоим на первом
+    // символе, надо чтоб поле было пустым.
+    (index) => index == 0
+        ? TextEditingController()
+        : TextEditingController(text: zeroWidthChar),
   ));
 
   final IOtpService _otpService;
@@ -59,7 +66,7 @@ class CodeConfirmWm extends WidgetModel<CodeConfirmScreen, ICodeConfirmModel>
   @override
   void initWidgetModel() {
     super.initWidgetModel();
-    _otpService.init(onCode: _onOtpCode);
+    _otpService.init(onCode: onOtpCode);
   }
 
   @override
@@ -73,12 +80,11 @@ class CodeConfirmWm extends WidgetModel<CodeConfirmScreen, ICodeConfirmModel>
   @override
   void submitCode(String code) {
     FocusManager.instance.primaryFocus?.unfocus();
-    debugPrint(code);
+    debugPrint('submitCode - $code');
   }
 
-  void _onOtpCode(String code) {
-    debugPrint(code);
-
+  @override
+  void onOtpCode(String code) {
     for (var index = 0; index < otpLength; index++) {
       codeFieldsControllers[index].text = code[index];
     }
