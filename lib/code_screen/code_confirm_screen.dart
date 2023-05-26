@@ -2,12 +2,9 @@ import 'package:elementary/elementary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otp_autofill_example/code_screen/code_confirm_wm.dart';
+import 'package:otp_autofill_example/utils/app_regexps.dart';
 
 const _otpTextScaleFactor = 1.0;
-
-final _emojiRegexp = RegExp(
-  r'(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])',
-);
 
 /// Экран подтверждения авторизации.
 class CodeConfirmScreen extends ElementaryWidget<ICodeConfirmWm> {
@@ -26,6 +23,7 @@ class CodeConfirmScreen extends ElementaryWidget<ICodeConfirmWm> {
           controllers: wm.codeFieldsControllers,
           otpLength: wm.otpLength,
           onCodeEntered: wm.submitCode,
+          onOtpCode: wm.onOtpCode,
         ),
       ),
     );
@@ -49,6 +47,9 @@ class _OptCode extends StatefulWidget {
   /// Обработчик изменения ввода кода подтверждения
   final ValueSetter<String>? onCodeChanged;
 
+  /// Обработчик кода введенного через распознавание SMS
+  final ValueSetter<String> onOtpCode;
+
   /// Состояние обработки запроса подтверждения кода
   final bool isLoading;
 
@@ -59,6 +60,7 @@ class _OptCode extends StatefulWidget {
     required this.controllers,
     required this.otpLength,
     required this.onCodeEntered,
+    required this.onOtpCode,
     this.onCodeChanged,
     this.hasError = false,
     this.isLoading = false,
@@ -87,10 +89,16 @@ class _OptCodeState extends State<_OptCode> {
   late final int _lastItemIndex;
   late final List<FocusNode> _focusNodes;
 
+  // Форматтер удаляет zeroWidthChar, который стоит в начале, если мы добавляем
+  // в поле цифру и кол-во символов становится больше 1.
   final TextInputFormatter _optCodeItemInputFormatter =
       TextInputFormatter.withFunction(
     (oldValue, newValue) {
-      final value = newValue.text.length > 1
+      // Добавим oldValue.text == zeroWidthChar и тем самым разрешим такое
+      // форматирование только для ячеек, где добавлен zeroWidthChar.
+      // Тем самым мы пропустим первую ячейку в начале, т.к. если этого не
+      // делать, то код при вставке будет обрезаться на первый символ.
+      final value = (newValue.text.length > 1 && oldValue.text == zeroWidthChar)
           ? newValue.replaced(const TextRange(start: 0, end: 1), '')
           : newValue;
       return value;
@@ -165,6 +173,7 @@ class _OptCodeState extends State<_OptCode> {
                 hasError: _hasError,
                 autoFocus: currentIndex == 0,
                 controller: widget.controllers[currentIndex],
+                otpLength: widget.otpLength,
                 focusNode: _focusNodes[currentIndex],
                 isLoading: widget.isLoading,
                 onChanged: (value) => _onChangedHandler(value, currentIndex),
@@ -187,7 +196,13 @@ class _OptCodeState extends State<_OptCode> {
     // для поддержки корректного удаления цифр
     if (currentIndex != _firstItemIndex && value.isEmpty) {
       _focusNodes[currentIndex - 1].requestFocus();
-      widget.controllers[currentIndex - 1].text = zeroWidthChar;
+      // Для первой ячейки (index == 0) не добавляем zeroWidthChar, чтоб вставка
+      // кода из SMS работала.
+      // Пользователь случайно начал что-то вводить, пришло SMS, он удалил все
+      // до первой ячейки и вставил.
+      widget.controllers[currentIndex - 1].text =
+          currentIndex != 1 ? zeroWidthChar : '';
+
       // Переходим на следующий элемент при вводе значение в текущие поле
       // Не меняем фокус если текущий элемент является последним
     } else if (currentIndex != _lastItemIndex && value.isNotEmpty) {
@@ -202,9 +217,21 @@ class _OptCodeState extends State<_OptCode> {
       }
     }
 
-    // Теряем фокус и передаем итоговое значение если достигли конца
-    // и все элементы имеют значение
-    if (currentIndex == _lastItemIndex && _isAllFieldsFull()) {
+    final isCodeEnteredManually =
+        currentIndex == _lastItemIndex && _isAllFieldsFull();
+    final isCodeEnteredAutomatically =
+        currentIndex == _firstItemIndex && AppRegexps.isCodeValid(value);
+
+    // Если код введен из SMS и валиден, то передаем его дальше по аналогии с
+    // Android.
+    if (isCodeEnteredAutomatically) {
+      debugPrint('isCodeEnteredAutomatically - $value');
+      widget.onOtpCode(value);
+    }
+
+    // Теряем фокус и передаем итоговое значение если достигли конца при вводе
+    // вручную и все элементы имеют значение
+    if (isCodeEnteredManually) {
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
         _isCompleted = true;
@@ -248,6 +275,11 @@ class _OptCodeState extends State<_OptCode> {
     for (final controller in widget.controllers) {
       controller.text = zeroWidthChar;
     }
+
+    // Чтоб появилось предложение вставить код на iOS, когда мы стоим на первом
+    // символе, надо сначала его удалить.
+    widget.controllers.first.text = '';
+
     _focusNodes[0].requestFocus();
     _isCompleted = false;
   }
@@ -271,6 +303,7 @@ class _OptCodeState extends State<_OptCode> {
 
 class _OptCodeInput extends StatefulWidget {
   final TextEditingController controller;
+  final int otpLength;
   final bool autoFocus;
   final FocusNode focusNode;
   final Function(String value) onChanged;
@@ -282,6 +315,7 @@ class _OptCodeInput extends StatefulWidget {
 
   const _OptCodeInput({
     required this.controller,
+    required this.otpLength,
     required this.focusNode,
     required this.onChanged,
     this.formatters,
@@ -335,7 +369,8 @@ class _OptCodeInputState extends State<_OptCodeInput> {
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     controller: widget.controller,
-                    maxLength: 2,
+                    // Увеличим длину первого поля до 6, чтоб код влезал.
+                    maxLength: widget.index == 0 ? widget.otpLength : 2,
                     focusNode: widget.focusNode,
                     cursorColor: Colors.black,
                     decoration: const InputDecoration(
@@ -351,7 +386,7 @@ class _OptCodeInputState extends State<_OptCodeInput> {
                     onChanged: widget.onChanged,
                     enableInteractiveSelection: false,
                     inputFormatters: [
-                      FilteringTextInputFormatter.deny(_emojiRegexp),
+                      FilteringTextInputFormatter.deny(AppRegexps.emojiRegexp),
                       ...?widget.formatters,
                     ],
                     onTap: widget.onTap,
